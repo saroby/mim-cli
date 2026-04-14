@@ -2,8 +2,8 @@ import pytest
 import numpy as np
 from unittest.mock import MagicMock, patch
 from pathlib import Path
-from meme_cli.embeddings import EmbeddingStore, metadata_to_text
-from meme_cli.models import MediaItem
+from mim_cli.embeddings import EmbeddingStore, metadata_to_text
+from mim_cli.models import MediaItem
 
 
 def make_item(**kwargs) -> MediaItem:
@@ -27,7 +27,7 @@ def test_metadata_to_text():
 @pytest.fixture
 def mock_store(tmp_path):
     """chromadb와 SentenceTransformer를 mock한 EmbeddingStore"""
-    with patch("meme_cli.embeddings.chromadb") as mock_chroma:
+    with patch("mim_cli.embeddings.chromadb") as mock_chroma:
         mock_collection = MagicMock()
         mock_chroma.PersistentClient.return_value.get_or_create_collection.return_value = mock_collection
         store = EmbeddingStore(chroma_dir=tmp_path / "chroma")

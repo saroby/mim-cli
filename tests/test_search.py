@@ -1,9 +1,9 @@
 import pytest
 from unittest.mock import MagicMock
-from meme_cli.store import MediaStore
-from meme_cli.search import MediaSearch
-from meme_cli.models import MediaItem
-from meme_cli.embeddings import EmbeddingStore
+from mim_cli.store import MediaStore
+from mim_cli.search import MediaSearch
+from mim_cli.models import MediaItem
+from mim_cli.embeddings import EmbeddingStore
 
 
 @pytest.fixture

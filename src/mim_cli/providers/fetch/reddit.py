@@ -19,11 +19,11 @@ from typing import Any, Optional
 
 import httpx
 
-from meme_cli.net import safe_get_bytes, UnsafeURLError, DownloadTooLargeError
-from meme_cli.providers import FetchProvider, FetchedMedia
+from mim_cli.net import safe_get_bytes, UnsafeURLError, DownloadTooLargeError
+from mim_cli.providers import FetchProvider, FetchedMedia
 
 
-DEFAULT_USER_AGENT = "meme-cli/0.1 (+https://github.com/)"
+DEFAULT_USER_AGENT = "mim-cli/0.1 (+https://github.com/)"
 
 
 class RedditProvider(FetchProvider):

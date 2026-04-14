@@ -4,16 +4,16 @@ from pathlib import Path
 from typer.testing import CliRunner
 from unittest.mock import patch, MagicMock
 
-from meme_cli.cli import app
-from meme_cli.models import MediaItem
-from meme_cli.store import MediaStore
+from mim_cli.cli import app
+from mim_cli.models import MediaItem
+from mim_cli.store import MediaStore
 
 runner = CliRunner()
 
 
 @pytest.fixture
 def env_vars(tmp_store_dir, monkeypatch):
-    monkeypatch.setenv("MEME_CLI_DIR", str(tmp_store_dir["base"]))
+    monkeypatch.setenv("MIM_CLI_DIR", str(tmp_store_dir["base"]))
     return tmp_store_dir
 
 
@@ -46,7 +46,7 @@ def store_with_items(env_vars):
 
 # --- add ---
 
-@patch("meme_cli.saver.MetadataGenerator")
+@patch("mim_cli.saver.MetadataGenerator")
 def test_add_command(mock_gen_class, env_vars, sample_image):
     mock_gen = MagicMock()
     mock_gen_class.return_value = mock_gen
@@ -64,7 +64,7 @@ def test_add_command(mock_gen_class, env_vars, sample_image):
     assert "노란 이미지" in result.output
 
 
-@patch("meme_cli.saver.MetadataGenerator")
+@patch("mim_cli.saver.MetadataGenerator")
 def test_add_copies_file_to_store(mock_gen_class, env_vars, sample_image):
     mock_gen = MagicMock()
     mock_gen_class.return_value = mock_gen
@@ -194,8 +194,8 @@ def test_remove_command(store_with_items, env_vars):
 
 # --- 임베딩 연동 ---
 
-@patch("meme_cli.cli.EmbeddingStore")
-@patch("meme_cli.saver.MetadataGenerator")
+@patch("mim_cli.cli.EmbeddingStore")
+@patch("mim_cli.saver.MetadataGenerator")
 def test_add_calls_embedding_upsert(mock_gen_class, mock_emb_class, env_vars, sample_image):
     mock_gen = MagicMock()
     mock_gen_class.return_value = mock_gen
@@ -214,7 +214,7 @@ def test_add_calls_embedding_upsert(mock_gen_class, mock_emb_class, env_vars, sa
     mock_emb.upsert.assert_called_once()
 
 
-@patch("meme_cli.cli.EmbeddingStore")
+@patch("mim_cli.cli.EmbeddingStore")
 def test_edit_calls_embedding_upsert(mock_emb_class, store_with_items, env_vars):
     mock_emb = MagicMock()
     mock_emb_class.return_value = mock_emb
@@ -226,7 +226,7 @@ def test_edit_calls_embedding_upsert(mock_emb_class, store_with_items, env_vars)
     mock_emb.upsert.assert_called_once()
 
 
-@patch("meme_cli.cli.EmbeddingStore")
+@patch("mim_cli.cli.EmbeddingStore")
 def test_remove_calls_embedding_delete(mock_emb_class, store_with_items, env_vars):
     mock_emb = MagicMock()
     mock_emb_class.return_value = mock_emb
@@ -238,7 +238,7 @@ def test_remove_calls_embedding_delete(mock_emb_class, store_with_items, env_var
     mock_emb.delete.assert_called_once_with(item_id)
 
 
-@patch("meme_cli.cli.EmbeddingStore")
+@patch("mim_cli.cli.EmbeddingStore")
 def test_search_semantic_flag(mock_emb_class, store_with_items, env_vars):
     mock_emb = MagicMock()
     mock_emb_class.return_value = mock_emb

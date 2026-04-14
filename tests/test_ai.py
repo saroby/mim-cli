@@ -1,6 +1,6 @@
 from unittest.mock import patch, MagicMock
 from pathlib import Path
-from meme_cli.ai import MetadataGenerator, GeneratedMetadata
+from mim_cli.ai import MetadataGenerator, GeneratedMetadata
 
 
 def test_generated_metadata_structure():
@@ -15,7 +15,7 @@ def test_generated_metadata_structure():
     assert isinstance(meta.tags, list)
 
 
-@patch("meme_cli.ai.subprocess.run")
+@patch("mim_cli.ai.subprocess.run")
 def test_generate_calls_claude_with_path(mock_run, tmp_path):
     img_path = tmp_path / "test.png"
     img_path.write_bytes(b"\x89PNG\r\n")  # 더미 파일
@@ -41,7 +41,7 @@ def test_generate_calls_claude_with_path(mock_run, tmp_path):
     assert meta.tags == ["충격"]
 
 
-@patch("meme_cli.ai.subprocess.run")
+@patch("mim_cli.ai.subprocess.run")
 def test_parse_json_in_markdown_block(mock_run, tmp_path):
     """Claude가 ```json 블록으로 감싸 응답해도 파싱 성공"""
     img_path = tmp_path / "meme.gif"

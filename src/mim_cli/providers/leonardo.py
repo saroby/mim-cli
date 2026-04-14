@@ -5,7 +5,7 @@ from typing import Any
 
 import httpx
 
-from meme_cli.providers import GeneratedImage, ImageProvider
+from mim_cli.providers import GeneratedImage, ImageProvider
 
 
 # aspect_ratio → (width, height). Leonardo는 픽셀 단위로 입력받음.

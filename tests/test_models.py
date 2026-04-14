@@ -1,4 +1,4 @@
-from meme_cli.models import MediaItem
+from mim_cli.models import MediaItem
 import uuid
 
 

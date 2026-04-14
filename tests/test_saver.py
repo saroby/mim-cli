@@ -3,15 +3,15 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from meme_cli.ai import GeneratedMetadata
-from meme_cli.models import MediaItem
-from meme_cli.saver import MetaOverride, save_media, sha256_file
-from meme_cli.store import MediaStore
+from mim_cli.ai import GeneratedMetadata
+from mim_cli.models import MediaItem
+from mim_cli.saver import MetaOverride, save_media, sha256_file
+from mim_cli.store import MediaStore
 
 
 @pytest.fixture
 def env(tmp_store_dir, monkeypatch):
-    monkeypatch.setenv("MEME_CLI_DIR", str(tmp_store_dir["base"]))
+    monkeypatch.setenv("MIM_CLI_DIR", str(tmp_store_dir["base"]))
     return tmp_store_dir
 
 

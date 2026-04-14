@@ -1,5 +1,5 @@
 [project]
-name = "meme-cli"
+name = "mim-cli"
 version = "0.1.0"
 description = "밈 미디어 관리 및 검색 CLI"
 requires-python = ">=3.11"
@@ -16,14 +16,14 @@ dependencies = [
 ]
 
 [project.scripts]
-meme = "meme_cli.cli:app"
+mim = "mim_cli.cli:app"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/meme_cli"]
+packages = ["src/mim_cli"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

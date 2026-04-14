@@ -966,7 +966,7 @@ wheels = [
 ]
 
 [[package]]
-name = "meme-cli"
+name = "mim-cli"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

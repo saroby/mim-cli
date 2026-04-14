@@ -1,7 +1,7 @@
 import sqlite3
 import pytest
-from meme_cli.store import MediaStore
-from meme_cli.models import MediaItem
+from mim_cli.store import MediaStore
+from mim_cli.models import MediaItem
 from pathlib import Path
 
 
@@ -177,7 +177,7 @@ def test_migration_v0_to_v1(tmp_store_dir):
     conn = sqlite3.connect(db_path)
     version = conn.execute("PRAGMA user_version").fetchone()[0]
     conn.close()
-    from meme_cli.store import MIGRATIONS
+    from mim_cli.store import MIGRATIONS
     assert version == len(MIGRATIONS)
 
     # 새 필드를 쓰는 아이템도 저장 가능

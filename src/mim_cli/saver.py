@@ -30,11 +30,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from meme_cli.ai import GeneratedMetadata, MetadataGenerator
-from meme_cli.config import get_media_dir
-from meme_cli.embeddings import EmbeddingStore
-from meme_cli.models import MediaItem
-from meme_cli.store import MediaStore
+from mim_cli.ai import GeneratedMetadata, MetadataGenerator
+from mim_cli.config import get_media_dir
+from mim_cli.embeddings import EmbeddingStore
+from mim_cli.models import MediaItem
+from mim_cli.store import MediaStore
 
 
 @dataclass
@@ -212,7 +212,7 @@ def save_media(
                 emb_store.upsert(item)
             except Exception as emb_err:
                 import sys as _sys
-                from meme_cli.output import mask_secret
+                from mim_cli.output import mask_secret
                 masked = mask_secret(str(emb_err))
                 print(f"[saver] 임베딩 업서트 실패 (DB는 유지): {masked}", file=_sys.stderr)
             return item, True

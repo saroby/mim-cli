@@ -5,7 +5,7 @@ from typing import Any
 from google import genai
 from google.genai import types
 
-from meme_cli.providers import GeneratedImage, ImageProvider
+from mim_cli.providers import GeneratedImage, ImageProvider
 
 
 class GeminiProvider(ImageProvider):

@@ -4,7 +4,7 @@ import httpx
 import pytest
 import respx
 
-from meme_cli.providers.fetch.openverse import OpenverseProvider
+from mim_cli.providers.fetch.openverse import OpenverseProvider
 
 
 @pytest.fixture

@@ -3,7 +3,7 @@ from typing import Optional
 
 import chromadb
 
-from meme_cli.models import MediaItem
+from mim_cli.models import MediaItem
 
 MODEL_NAME = "BAAI/bge-m3"
 

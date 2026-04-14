@@ -3,7 +3,7 @@
 import httpx
 import respx
 
-from meme_cli.providers.fetch.reddit import RedditProvider
+from mim_cli.providers.fetch.reddit import RedditProvider
 
 
 def _search_response(children):
@@ -121,7 +121,7 @@ def test_user_agent_header_sent():
     )
     RedditProvider().search("x")
     ua = route.calls[0].request.headers["user-agent"]
-    assert "meme-cli" in ua
+    assert "mim-cli" in ua
 
 
 @respx.mock

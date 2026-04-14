@@ -11,10 +11,10 @@ import typer
 from rich.panel import Panel
 from rich.table import Table
 
-from meme_cli.config import get_db_path, get_media_dir, get_chroma_dir
-from meme_cli.embeddings import EmbeddingStore
-from meme_cli.models import MediaItem
-from meme_cli.output import (
+from mim_cli.config import get_db_path, get_media_dir, get_chroma_dir
+from mim_cli.embeddings import EmbeddingStore
+from mim_cli.models import MediaItem
+from mim_cli.output import (
     classify_error,
     confirm,
     emit,
@@ -28,25 +28,25 @@ from meme_cli.output import (
     out_console,
     set_flags,
 )
-from meme_cli.providers import FetchProvider, ImageProvider
-from meme_cli.saver import MetaOverride, save_media
-from meme_cli.search import MediaSearch
-from meme_cli.store import MediaStore
+from mim_cli.providers import FetchProvider, ImageProvider
+from mim_cli.saver import MetaOverride, save_media
+from mim_cli.search import MediaSearch
+from mim_cli.store import MediaStore
 
 GEN_PROVIDERS: dict[str, type[ImageProvider]] = {}
 FETCH_PROVIDERS: dict[str, type[FetchProvider]] = {}
 
 
 def _register_providers() -> None:
-    from meme_cli.providers.gemini import GeminiProvider
-    from meme_cli.providers.leonardo import LeonardoProvider
-    from meme_cli.providers.replicate import ReplicateProvider
-    from meme_cli.providers.fetch.giphy import GiphyProvider
-    from meme_cli.providers.fetch.openverse import OpenverseProvider
-    from meme_cli.providers.fetch.pexels import PexelsProvider
-    from meme_cli.providers.fetch.pixabay import PixabayProvider
-    from meme_cli.providers.fetch.reddit import RedditProvider
-    from meme_cli.providers.fetch.unsplash import UnsplashProvider
+    from mim_cli.providers.gemini import GeminiProvider
+    from mim_cli.providers.leonardo import LeonardoProvider
+    from mim_cli.providers.replicate import ReplicateProvider
+    from mim_cli.providers.fetch.giphy import GiphyProvider
+    from mim_cli.providers.fetch.openverse import OpenverseProvider
+    from mim_cli.providers.fetch.pexels import PexelsProvider
+    from mim_cli.providers.fetch.pixabay import PixabayProvider
+    from mim_cli.providers.fetch.reddit import RedditProvider
+    from mim_cli.providers.fetch.unsplash import UnsplashProvider
 
     GEN_PROVIDERS["gemini"] = GeminiProvider
     GEN_PROVIDERS["replicate"] = ReplicateProvider
@@ -82,15 +82,15 @@ app = typer.Typer(
 @app.callback()
 def main(
     pretty: bool = typer.Option(
-        False, "--pretty", envvar="MEME_CLI_PRETTY",
+        False, "--pretty", envvar="MIM_CLI_PRETTY",
         help="사람용 Rich 출력. 미지정 시 기본은 JSON (AI 친화)",
     ),
     timeout: float = typer.Option(
-        120.0, "--timeout", envvar="MEME_CLI_TIMEOUT",
+        120.0, "--timeout", envvar="MIM_CLI_TIMEOUT",
         help="HTTP 요청/폴링 타임아웃 (초)",
     ),
     assume_yes: bool = typer.Option(
-        False, "--yes", "-y", envvar="MEME_CLI_ASSUME_YES",
+        False, "--yes", "-y", envvar="MIM_CLI_ASSUME_YES",
         help="확인 프롬프트 자동 승인",
     ),
 ) -> None:
@@ -356,7 +356,7 @@ def list_items(
 
     def render():
         if not items:
-            err_console.print("[yellow]저장된 밈이 없습니다. 'meme add <파일>'로 추가하세요.[/yellow]")
+            err_console.print("[yellow]저장된 밈이 없습니다. 'mim add <파일>'로 추가하세요.[/yellow]")
             return
         table = Table(title="밈 목록")
         table.add_column("ID", style="dim", width=8)
@@ -407,7 +407,7 @@ def remove(
     item_id: str = typer.Argument(..., help="삭제할 아이템 ID"),
     keep_file: bool = typer.Option(False, "--keep-file", help="원본 파일 유지"),
 ) -> None:
-    """저장소에서 밈 삭제. 글로벌 --yes 또는 MEME_CLI_ASSUME_YES로 확인 건너뛰기."""
+    """저장소에서 밈 삭제. 글로벌 --yes 또는 MIM_CLI_ASSUME_YES로 확인 건너뛰기."""
     store = _get_store()
     item = _resolve_item(store, item_id)
 
@@ -433,7 +433,7 @@ def remove(
 def generate(
     prompt: str = typer.Argument(..., help="생성할 이미지 설명 (프롬프트)"),
     provider: str = typer.Option("gemini", "--provider", "-p", help="프로바이더 (gemini, replicate, leonardo)"),
-    model: Optional[str] = typer.Option(None, "--model", "-m", help="모델 별명 (meme models <provider>로 목록 확인)"),
+    model: Optional[str] = typer.Option(None, "--model", "-m", help="모델 별명 (mim models <provider>로 목록 확인)"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="외부 출력 경로 (지정해도 저장소에는 별도 사본 보관, --no-save면 외부에만)"),
     aspect_ratio: Optional[str] = typer.Option(None, "--aspect-ratio", "-ar", help="비율 (1:1, 16:9, 9:16, 4:3, 3:4)"),
     num_images: int = typer.Option(1, "--num-images", "-n", min=1, max=10, help="생성 개수 (AI 메타데이터는 N번 호출)"),

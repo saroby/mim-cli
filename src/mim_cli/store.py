@@ -3,7 +3,7 @@ import sqlite3
 from pathlib import Path
 from typing import Callable, Optional
 
-from meme_cli.models import MediaItem
+from mim_cli.models import MediaItem
 
 
 # ────────────────────────────────────────────────────────────
@@ -140,7 +140,7 @@ def _migrate_v0_to_v1(conn: sqlite3.Connection) -> None:
 def _migrate_v1_to_v2(conn: sqlite3.Connection) -> None:
     """원자적 dedup을 위한 부분 유니크 인덱스. 기존 중복 행이 있으면 마이그레이션 실패.
 
-    실패 시: `meme dedup` 같은 수단으로 수동 정리 후 재시도해야 함.
+    실패 시: `mim dedup` 같은 수단으로 수동 정리 후 재시도해야 함.
     """
     conn.execute(CREATE_UNIQUE_SOURCE_KEY)
     conn.execute(CREATE_UNIQUE_CONTENT_HASH)

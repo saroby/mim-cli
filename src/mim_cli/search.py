@@ -1,9 +1,9 @@
 from typing import Optional, TYPE_CHECKING
-from meme_cli.models import MediaItem
-from meme_cli.store import MediaStore
+from mim_cli.models import MediaItem
+from mim_cli.store import MediaStore
 
 if TYPE_CHECKING:
-    from meme_cli.embeddings import EmbeddingStore
+    from mim_cli.embeddings import EmbeddingStore
 
 
 class MediaSearch:

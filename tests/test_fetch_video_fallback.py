@@ -3,8 +3,8 @@
 import httpx
 import respx
 
-from meme_cli.providers.fetch.pexels import PexelsProvider
-from meme_cli.providers.fetch.pixabay import PixabayProvider
+from mim_cli.providers.fetch.pexels import PexelsProvider
+from mim_cli.providers.fetch.pixabay import PixabayProvider
 
 
 # --- Pexels ---

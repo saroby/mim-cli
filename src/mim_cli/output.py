@@ -169,7 +169,7 @@ def log(msg: str) -> None:
 def confirm(prompt: str, *, default: bool = False, destructive: bool = False) -> bool:
     """사용자 확인.
 
-    - `--yes`/`MEME_CLI_ASSUME_YES`면 자동 승인.
+    - `--yes`/`MIM_CLI_ASSUME_YES`면 자동 승인.
     - pretty(사람) 모드면 typer 프롬프트.
     - JSON 모드면: destructive=True일 때 --yes 없으면 에러로 실패.
       그 외에는 자동 승인 (비파괴적 결정은 스크립트에 맡김).
@@ -180,7 +180,7 @@ def confirm(prompt: str, *, default: bool = False, destructive: bool = False) ->
         if destructive:
             emit_error(
                 "confirmation_required",
-                "파괴적 작업은 비대화형(JSON) 모드에서 --yes 또는 MEME_CLI_ASSUME_YES가 필요합니다.",
+                "파괴적 작업은 비대화형(JSON) 모드에서 --yes 또는 MIM_CLI_ASSUME_YES가 필요합니다.",
             )
         return True
     return typer.confirm(prompt, default=default)

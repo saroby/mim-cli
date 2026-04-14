@@ -4,10 +4,10 @@ import httpx
 import pytest
 import respx
 
-from meme_cli.providers.fetch.giphy import GiphyProvider
-from meme_cli.providers.fetch.pexels import PexelsProvider
-from meme_cli.providers.fetch.pixabay import PixabayProvider
-from meme_cli.providers.fetch.unsplash import UnsplashProvider
+from mim_cli.providers.fetch.giphy import GiphyProvider
+from mim_cli.providers.fetch.pexels import PexelsProvider
+from mim_cli.providers.fetch.pixabay import PixabayProvider
+from mim_cli.providers.fetch.unsplash import UnsplashProvider
 
 
 # ────────── Giphy ──────────

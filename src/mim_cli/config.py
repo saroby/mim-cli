@@ -3,11 +3,11 @@ import os
 
 
 def get_base_dir() -> Path:
-    """환경변수 MEME_CLI_DIR 또는 ~/.meme-cli 사용"""
-    base = os.environ.get("MEME_CLI_DIR")
+    """환경변수 MIM_CLI_DIR 또는 ~/.mim-cli 사용"""
+    base = os.environ.get("MIM_CLI_DIR")
     if base:
         return Path(base)
-    return Path.home() / ".meme-cli"
+    return Path.home() / ".mim-cli"
 
 
 def get_db_path() -> Path:

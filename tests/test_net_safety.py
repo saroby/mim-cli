@@ -5,7 +5,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from meme_cli.net import (
+from mim_cli.net import (
     DownloadTooLargeError,
     UnsafeURLError,
     safe_get_bytes,

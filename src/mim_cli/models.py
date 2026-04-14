@@ -6,7 +6,7 @@ import uuid
 
 @dataclass
 class MediaItem:
-    path: str                   # ~/.meme-cli/media/ 내 저장 경로
+    path: str                   # ~/.mim-cli/media/ 내 저장 경로
     media_type: str             # 'video' | 'gif' | 'image'
     name: str                   # 사람이 읽기 쉬운 이름
     description: str            # AI가 생성한 상세 설명

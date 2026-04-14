@@ -7,8 +7,8 @@ from typing import Any, Callable, Optional
 
 import httpx
 
-from meme_cli.net import safe_get_bytes, UnsafeURLError, DownloadTooLargeError
-from meme_cli.providers import FetchProvider, FetchedMedia
+from mim_cli.net import safe_get_bytes, UnsafeURLError, DownloadTooLargeError
+from mim_cli.providers import FetchProvider, FetchedMedia
 
 
 class PexelsProvider(FetchProvider):

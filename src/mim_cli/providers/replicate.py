@@ -5,7 +5,7 @@ from typing import Any
 
 import httpx
 
-from meme_cli.providers import GeneratedImage, ImageProvider
+from mim_cli.providers import GeneratedImage, ImageProvider
 
 
 # 별명 → (slug, 설명)

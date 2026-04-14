@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 uv sync                    # 의존성 설치
-uv run meme --help         # CLI 실행
+uv run mim --help         # CLI 실행
 pytest tests/              # 전체 테스트
 pytest tests/test_store.py # 단일 파일 테스트
 pytest tests/test_store.py::test_save_and_get -v  # 단일 테스트
@@ -47,7 +47,7 @@ pytest tests/test_store.py::test_save_and_get -v  # 단일 테스트
   - `FetchProvider` (온라인 API): `providers/fetch/` 서브패키지. `search(query, limit, media_type) → list[FetchedMedia]`
 - `cli.py` — 두 레지스트리 분리: `GEN_PROVIDERS`, `FETCH_PROVIDERS`. `_build_gen_provider` / `_build_fetch_provider` 분기
 
-**저장소 구조** (`~/.meme-cli/`, `MEME_CLI_DIR` 환경변수로 오버라이드):
+**저장소 구조** (`~/.mim-cli/`, `MIM_CLI_DIR` 환경변수로 오버라이드):
 - `memes.db` — SQLite (media_items + FTS5 가상 테이블). `PRAGMA user_version` 현재 버전 1
 - `media/` — 원본/가져온/생성된 미디어 파일 (UUID 파일명, 확장자는 mime에서 추론)
 - `chroma/` — ChromaDB 벡터 저장소
@@ -59,13 +59,13 @@ pytest tests/test_store.py::test_save_and_get -v  # 단일 테스트
 
 ## 글로벌 옵션 (서브커맨드 앞에 배치)
 
-- `--pretty` — 사람용 Rich 출력 (환경변수 `MEME_CLI_PRETTY`). 미지정 시 JSON (AI 친화 기본)
-- `--timeout N` — HTTP 타임아웃 초 (환경변수 `MEME_CLI_TIMEOUT`)
-- `--yes`/`-y` — 확인 프롬프트 자동 승인 (환경변수 `MEME_CLI_ASSUME_YES`)
+- `--pretty` — 사람용 Rich 출력 (환경변수 `MIM_CLI_PRETTY`). 미지정 시 JSON (AI 친화 기본)
+- `--timeout N` — HTTP 타임아웃 초 (환경변수 `MIM_CLI_TIMEOUT`)
+- `--yes`/`-y` — 확인 프롬프트 자동 승인 (환경변수 `MIM_CLI_ASSUME_YES`)
 
 ## 환경변수
 
-- `MEME_CLI_DIR` — 저장소 루트 경로 (기본: `~/.meme-cli`)
+- `MIM_CLI_DIR` — 저장소 루트 경로 (기본: `~/.mim-cli`)
 - **생성 프로바이더:**
   - `GEMINI_API_KEYS` — Gemini (쉼표로 여러 키 구분, 429 시 자동 전환)
   - `REPLICATE_API_TOKEN` (또는 `REPLICATE_API_KEY`) — Replicate
@@ -83,5 +83,5 @@ pytest tests/test_store.py::test_save_and_get -v  # 단일 테스트
 - `conftest.py`의 `tmp_store_dir` fixture로 테스트별 격리된 DB/미디어 디렉토리 생성
 - EmbeddingStore는 모델 로딩이 느리므로 테스트에서 mock 처리
 - **Fetch 프로바이더**: `respx` + `httpx.MockTransport`로 네트워크 mock (실제 API 호출 없음)
-- **MetadataGenerator** (claude --print): 테스트에서 `@patch("meme_cli.saver.MetadataGenerator")` 로 mock
+- **MetadataGenerator** (claude --print): 테스트에서 `@patch("mim_cli.saver.MetadataGenerator")` 로 mock
 - 한국어 메타데이터 (이름, 태그, 감정, 맥락)
