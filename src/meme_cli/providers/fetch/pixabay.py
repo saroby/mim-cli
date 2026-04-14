@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Optional
+from typing import Any, Callable, Optional
 
 import httpx
 
@@ -34,6 +34,7 @@ class PixabayProvider(FetchProvider):
                 "https://pixabay.com/api/docs/ 에서 발급."
             )
 
+        # Pixabay API는 per_page 최소값 3을 요구.
         params = {
             "key": self._key,
             "q": query,
@@ -41,39 +42,96 @@ class PixabayProvider(FetchProvider):
             "safesearch": "true",
         }
 
+        if media_type == "video":
+            return self._execute(
+                f"{self.BASE_URL}/videos/", params,
+                limit=limit, extract=self._extract_video,
+            )
+        return self._execute(
+            f"{self.BASE_URL}/", params,
+            limit=limit, extract=self._extract_image,
+        )
+
+    def _execute(
+        self,
+        endpoint: str,
+        params: dict,
+        *,
+        limit: int,
+        extract: Callable[[dict], list[dict]],
+    ) -> list[FetchedMedia]:
         with httpx.Client(timeout=self._timeout) as client:
-            resp = client.get(f"{self.BASE_URL}/", params=params)
+            resp = client.get(endpoint, params=params)
             resp.raise_for_status()
-            payload = resp.json()
+            results: list[FetchedMedia] = []
+            for item in (resp.json().get("hits") or [])[:limit]:
+                for candidate in extract(item):
+                    url = candidate["source_url"]
+                    try:
+                        data, _ = safe_get_bytes(client, url)
+                    except (httpx.HTTPError, UnsafeURLError, DownloadTooLargeError):
+                        # 다음 rendition으로 fallback. 50MB 상한, CDN 장애 대응.
+                        continue
+                    results.append(FetchedMedia(data=data, **candidate))
+                    break
+            return results
 
-            results = []
-            for item in (payload.get("hits") or [])[:limit]:
-                image_url = item.get("largeImageURL") or item.get("webformatURL")
-                if not image_url:
-                    continue
-                try:
-                    img_bytes, _ = safe_get_bytes(client, image_url)
-                except (httpx.HTTPError, UnsafeURLError, DownloadTooLargeError):
-                    continue
+    @staticmethod
+    def _extract_image(item: dict) -> list[dict[str, Any]]:
+        urls = [item.get("largeImageURL"), item.get("webformatURL")]
+        creator = item.get("user")
+        base: dict[str, Any] = {
+            "mime_type": "image/jpeg",
+            "source_id": str(item.get("id", "")),
+            "width": item.get("imageWidth"),
+            "height": item.get("imageHeight"),
+            "attribution": f"Image by {creator} on Pixabay" if creator else None,
+            "license": "Pixabay Content License",
+            "license_url": "https://pixabay.com/service/license-summary/",
+            "metadata": {
+                "tags": item.get("tags"),
+                "page_url": item.get("pageURL"),
+                "user_id": item.get("user_id"),
+            },
+        }
+        return [{"source_url": u, **base} for u in urls if u]
 
-                creator = item.get("user")
-                attribution = f"Image by {creator} on Pixabay" if creator else None
+    @staticmethod
+    def _extract_video(item: dict) -> list[dict[str, Any]]:
+        variants = _rank_pixabay_videos(item.get("videos") or {})
+        if not variants:
+            return []
+        creator = item.get("user")
+        # 이미지 id와 네임스페이스 분리: dedupe 키가 이미지·비디오 교차 alias되는 것 방지.
+        source_id = f"video:{item.get('id', '')}"
+        candidates = []
+        for v in variants:
+            candidates.append({
+                "source_url": v["url"],
+                "mime_type": "video/mp4",
+                "source_id": source_id,
+                "width": v.get("width"),
+                "height": v.get("height"),
+                "attribution": f"Video by {creator} on Pixabay" if creator else None,
+                "license": "Pixabay Content License",
+                "license_url": "https://pixabay.com/service/license-summary/",
+                "metadata": {
+                    "tags": item.get("tags"),
+                    "page_url": item.get("pageURL"),
+                    "user_id": item.get("user_id"),
+                    "duration": item.get("duration"),
+                    "quality": v.get("_quality"),
+                },
+            })
+        return candidates
 
-                results.append(FetchedMedia(
-                    data=img_bytes,
-                    mime_type="image/jpeg",
-                    source_url=image_url,
-                    source_id=str(item.get("id", "")),
-                    width=item.get("imageWidth"),
-                    height=item.get("imageHeight"),
-                    attribution=attribution,
-                    license="Pixabay Content License",
-                    license_url="https://pixabay.com/service/license-summary/",
-                    metadata={
-                        "tags": item.get("tags"),
-                        "page_url": item.get("pageURL"),
-                        "user_id": item.get("user_id"),
-                    },
-                ))
 
-        return results
+def _rank_pixabay_videos(variants: dict) -> list[dict]:
+    # small(960p) 우선 — 품질/크기 균형. large(1080p)는 50MB 상한을 넘기 쉬워 최후.
+    # 실패 시 다음 variant로 fallback.
+    ranked = []
+    for key in ("small", "medium", "tiny", "large"):
+        v = variants.get(key)
+        if v and v.get("url"):
+            ranked.append({**v, "_quality": key})
+    return ranked
