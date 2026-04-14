@@ -20,13 +20,17 @@ MCP 서버를 띄울 필요 없이, Claude Code·Cursor·Codex 같은 코딩 에
 
 ## 설치
 
-```bash
-uv sync
-cp .env.sample .env   # API 키 채우기 (선택)
-uv run mim --help
-```
+Python 3.11+ 필요.
 
-Python 3.11+ 필요. `uv tool install .` 하면 `mim` 명령이 전역으로 설치된다.
+```bash
+uv tool install mim-cli     # uv
+# 또는
+pipx install mim-cli        # pipx
+# 또는
+pip install mim-cli         # pip
+
+mim --help
+```
 
 ---
 
