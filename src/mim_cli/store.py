@@ -264,6 +264,10 @@ class MediaStore:
             ).fetchone()
         return self._row_to_item(row) if row else None
 
+    def count(self) -> int:
+        with self._conn() as conn:
+            return conn.execute("SELECT COUNT(*) FROM media_items").fetchone()[0]
+
     def list_all(
         self,
         media_type: Optional[str] = None,

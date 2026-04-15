@@ -29,37 +29,10 @@ from mim_cli.output import (
     set_flags,
 )
 from mim_cli.providers import FetchProvider, ImageProvider
+from mim_cli.providers.registry import GEN_PROVIDERS, FETCH_PROVIDERS
 from mim_cli.saver import MetaOverride, save_media
 from mim_cli.search import MediaSearch
 from mim_cli.store import MediaStore
-
-GEN_PROVIDERS: dict[str, type[ImageProvider]] = {}
-FETCH_PROVIDERS: dict[str, type[FetchProvider]] = {}
-
-
-def _register_providers() -> None:
-    from mim_cli.providers.gemini import GeminiProvider
-    from mim_cli.providers.leonardo import LeonardoProvider
-    from mim_cli.providers.replicate import ReplicateProvider
-    from mim_cli.providers.fetch.giphy import GiphyProvider
-    from mim_cli.providers.fetch.openverse import OpenverseProvider
-    from mim_cli.providers.fetch.pexels import PexelsProvider
-    from mim_cli.providers.fetch.pixabay import PixabayProvider
-    from mim_cli.providers.fetch.reddit import RedditProvider
-    from mim_cli.providers.fetch.unsplash import UnsplashProvider
-
-    GEN_PROVIDERS["gemini"] = GeminiProvider
-    GEN_PROVIDERS["replicate"] = ReplicateProvider
-    GEN_PROVIDERS["leonardo"] = LeonardoProvider
-    FETCH_PROVIDERS["giphy"] = GiphyProvider
-    FETCH_PROVIDERS["reddit"] = RedditProvider
-    FETCH_PROVIDERS["unsplash"] = UnsplashProvider
-    FETCH_PROVIDERS["pexels"] = PexelsProvider
-    FETCH_PROVIDERS["pixabay"] = PixabayProvider
-    FETCH_PROVIDERS["openverse"] = OpenverseProvider
-
-
-_register_providers()
 
 PROVIDER_ENV = {
     "gemini": "GEMINI_API_KEYS",
@@ -153,27 +126,10 @@ def _build_fetch_provider(name: str, **extra) -> FetchProvider:
     return cls(**kwargs)
 
 
-def _suffix_from_mime(mime: str) -> str:
-    """MIME → 파일 확장자."""
-    mapping = {
-        "image/png": ".png",
-        "image/jpeg": ".jpg",
-        "image/jpg": ".jpg",
-        "image/gif": ".gif",
-        "image/webp": ".webp",
-        "video/mp4": ".mp4",
-    }
-    return mapping.get(mime.lower(), ".bin")
-
-
-def _media_type_from_mime(mime: str) -> str:
-    """MIME → media_type."""
-    m = mime.lower()
-    if m.startswith("video/"):
-        return "video"
-    if m == "image/gif":
-        return "gif"
-    return "image"
+from mim_cli.providers.registry import (
+    media_type_from_mime as _media_type_from_mime,
+    suffix_from_mime as _suffix_from_mime,
+)
 
 
 @app.command()
@@ -375,6 +331,34 @@ def list_items(
         out_console.print(table)
 
     emit([i.to_dict() for i in items], human_render=render)
+
+
+@app.command()
+def serve(
+    port: int = typer.Option(7337, "--port", "-p", help="포트 번호"),
+    no_open: bool = typer.Option(False, "--no-open", help="브라우저 자동 오픈 비활성"),
+) -> None:
+    """로컬 미디어 브라우저 웹 서버 시작."""
+    import webbrowser
+    from mim_cli.server import make_server
+
+    url = f"http://127.0.0.1:{port}"
+    server = make_server(port)
+
+    if is_pretty():
+        out_console.print(f"[bold green]mim 브라우저 실행 중[/bold green] → [link={url}]{url}[/link]")
+        out_console.print("[dim]종료: Ctrl+C[/dim]")
+    else:
+        log(f"serving at {url}")
+
+    if not no_open:
+        webbrowser.open(url)
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        server.shutdown()
+        log("server stopped")
 
 
 @app.command()
