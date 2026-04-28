@@ -80,6 +80,7 @@ def test_save_and_get_new_fields(store):
         prompt="cute cat",
         model="phoenix",
         content_hash="abc123",
+        perceptual_hash="8055005500550055",
         width=1024,
         height=1024,
     )
@@ -90,6 +91,7 @@ def test_save_and_get_new_fields(store):
     assert fetched.prompt == "cute cat"
     assert fetched.model == "phoenix"
     assert fetched.content_hash == "abc123"
+    assert fetched.perceptual_hash == "8055005500550055"
     assert fetched.width == 1024
 
 
@@ -117,6 +119,88 @@ def test_find_by_hash(store):
     assert found is not None
     assert found.content_hash == "hash-1"
     assert store.find_by_hash("hash-404") is None
+
+
+def test_count_by_prompt_and_find_oldest(store):
+    """같은 (provider, prompt) 누적 카운트 + 가장 오래된 항목 조회."""
+    store.save(make_item(
+        source_provider="pexels", source_id="p-1",
+        prompt="cat", created_at="2024-01-01T00:00:00+00:00",
+    ))
+    store.save(make_item(
+        source_provider="pexels", source_id="p-2",
+        prompt="cat", created_at="2024-01-02T00:00:00+00:00",
+    ))
+    store.save(make_item(
+        source_provider="pexels", source_id="p-3",
+        prompt="dog", created_at="2024-01-03T00:00:00+00:00",
+    ))
+    store.save(make_item(
+        source_provider="giphy", source_id="g-1",
+        prompt="cat", created_at="2024-01-04T00:00:00+00:00",
+    ))
+
+    assert store.count_by_prompt("pexels", "cat") == 2
+    assert store.count_by_prompt("pexels", "dog") == 1
+    assert store.count_by_prompt("giphy", "cat") == 1
+    assert store.count_by_prompt("giphy", "missing") == 0
+
+    oldest = store.find_oldest_by_prompt("pexels", "cat")
+    assert oldest is not None
+    assert oldest.source_id == "p-1"
+    assert store.find_oldest_by_prompt("pexels", "missing") is None
+
+
+def test_migration_v2_to_v3_adds_perceptual_hash(tmp_store_dir):
+    """v2 DB는 perceptual_hash 컬럼과 인덱스를 자동으로 받아야 한다."""
+    db_path = tmp_store_dir["db"]
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE media_items (
+            id TEXT PRIMARY KEY,
+            path TEXT NOT NULL,
+            media_type TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL,
+            tags TEXT NOT NULL,
+            emotions TEXT NOT NULL,
+            context TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'upload',
+            source_provider TEXT,
+            source_url TEXT,
+            source_id TEXT,
+            prompt TEXT,
+            model TEXT,
+            content_hash TEXT,
+            attribution TEXT,
+            license TEXT,
+            license_url TEXT,
+            width INTEGER,
+            height INTEGER
+        )
+    """)
+    conn.execute("PRAGMA user_version = 2")
+    conn.commit()
+    conn.close()
+
+    store = MediaStore(db_path=db_path)
+
+    conn = sqlite3.connect(db_path)
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(media_items)")}
+    indexes = {row[1] for row in conn.execute("PRAGMA index_list(media_items)")}
+    version = conn.execute("PRAGMA user_version").fetchone()[0]
+    conn.close()
+
+    from mim_cli.store import MIGRATIONS
+    assert "perceptual_hash" in columns
+    assert "idx_perceptual_hash" in indexes
+    assert version == len(MIGRATIONS)
+
+    store.save(make_item(name="pHash", perceptual_hash="8055005500550055"))
+    fetched = store.list_all()[0]
+    assert fetched.perceptual_hash == "8055005500550055"
 
 
 def test_list_by_source_filter(store):

@@ -28,9 +28,19 @@ from mim_cli.output import (
     out_console,
     set_flags,
 )
+from mim_cli.perceptual import (
+    DEFAULT_PHASH_THRESHOLD,
+    compute_perceptual_hash,
+    find_visual_duplicate_groups,
+)
 from mim_cli.providers import FetchProvider, ImageProvider
 from mim_cli.providers.registry import GEN_PROVIDERS, FETCH_PROVIDERS
-from mim_cli.saver import MetaOverride, save_media
+from mim_cli.saver import (
+    DEFAULT_SEMANTIC_THRESHOLD,
+    FETCH_MAX_PER_PROMPT,
+    MetaOverride,
+    save_media,
+)
 from mim_cli.search import MediaSearch
 from mim_cli.store import MediaStore
 
@@ -72,8 +82,8 @@ def main(
     set_flags(pretty=pretty, timeout=timeout, assume_yes=assume_yes)
 
 
-def _get_store() -> MediaStore:
-    return MediaStore(db_path=get_db_path())
+def _get_store(initialize: bool = True) -> MediaStore:
+    return MediaStore(db_path=get_db_path(), initialize=initialize)
 
 
 def _get_emb_store() -> EmbeddingStore:
@@ -293,8 +303,12 @@ def edit(
 
     item.touch()
     store.update(item)
-    emb_store = _get_emb_store()
-    emb_store.upsert(item)
+    # 임베딩 갱신 실패가 메타데이터 수정 자체를 롤백시키면 오프라인/모델 캐시 없는 환경에서 UX가 깨진다.
+    try:
+        emb_store = _get_emb_store()
+        emb_store.upsert(item)
+    except Exception as emb_err:
+        log(f"임베딩 업서트 실패 (DB는 유지): {mask_secret(str(emb_err))}")
 
     def render():
         out_console.print(f"[green]수정됨: {item.name} ({item.id[:8]})[/green]")
@@ -411,6 +425,132 @@ def remove(
         out_console.print(f"[green]삭제됨: {item.name}[/green]")
 
     emit({"deleted": True, "id": item.id, "name": item.name}, human_render=render)
+
+
+@app.command()
+def dedup(
+    visual: bool = typer.Option(False, "--visual", help="pHash 기반 시각 중복 그룹을 찾습니다."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="삭제 없이 중복 그룹만 출력합니다. 기본 동작입니다."),
+    apply: bool = typer.Option(False, "--apply", help="각 그룹에서 가장 오래된 항목만 남기고 나머지를 삭제합니다."),
+    threshold: int = typer.Option(
+        DEFAULT_PHASH_THRESHOLD,
+        "--threshold",
+        min=0,
+        help="pHash Hamming distance 임계값",
+    ),
+) -> None:
+    """저장소 중복 정리. 현재는 --visual 모드만 지원."""
+    if not visual:
+        emit_error("missing_option", "현재 dedup은 --visual 옵션이 필요합니다.")
+    if dry_run and apply:
+        emit_error("invalid_option", "--dry-run과 --apply는 함께 사용할 수 없습니다.")
+
+    db_path = get_db_path()
+    if not db_path.exists():
+        emit({"groups": [], "total_duplicate_count": 0})
+        return
+
+    store = _get_store(initialize=apply)
+    items = store.list_all()
+    log(f"{len(items)}개 항목의 시각 해시를 검사 중...")
+
+    hashed_items = _items_with_visual_hashes(items, store=store if apply else None)
+    groups = find_visual_duplicate_groups(hashed_items, threshold=threshold)
+    total_duplicate_count = sum(len(group["duplicates"]) for group in groups)
+
+    if apply and total_duplicate_count:
+        _delete_visual_duplicates(store, groups)
+    elif not apply:
+        log("dry-run 모드: 파일과 DB를 변경하지 않습니다.")
+
+    payload = {
+        "groups": [
+            {
+                "keep": group["keep"].to_dict(),
+                "duplicates": [item.to_dict() for item in group["duplicates"]],
+            }
+            for group in groups
+        ],
+        "total_duplicate_count": total_duplicate_count,
+    }
+
+    def render():
+        mode = "적용" if apply else "dry-run"
+        if not groups:
+            out_console.print(f"[green]시각 중복 그룹 없음[/green] ({mode})")
+            return
+        table = Table(title=f"시각 중복 그룹 ({mode}, threshold={threshold})")
+        table.add_column("유지 ID", style="green", width=8)
+        table.add_column("유지 이름", style="bold")
+        table.add_column("삭제 후보", style="yellow")
+        table.add_column("개수", justify="right")
+        for group in groups:
+            keep = group["keep"]
+            duplicates = group["duplicates"]
+            table.add_row(
+                keep.id[:8],
+                keep.name,
+                ", ".join(item.id[:8] for item in duplicates),
+                str(len(duplicates)),
+            )
+        out_console.print(table)
+
+    emit(payload, human_render=render)
+
+
+def _items_with_visual_hashes(
+    items: list[MediaItem],
+    *,
+    store: Optional[MediaStore] = None,
+) -> list[MediaItem]:
+    """기존 pHash가 없으면 파일에서 임시 계산. store가 주어지면 계산값을 DB에 백필한다.
+
+    백필을 store=None으로 끄는 이유: dry-run은 read-only 의도라 silent side-effect를 피한다.
+    """
+    hashed_items: list[MediaItem] = []
+    for item in items:
+        if item.perceptual_hash:
+            hashed_items.append(item)
+            continue
+
+        try:
+            item.perceptual_hash = compute_perceptual_hash(Path(item.path))
+        except FileNotFoundError as err:
+            log(f"파일 없음으로 시각 해시 스킵: {item.id[:8]} {mask_secret(str(err))}")
+            continue
+        except Exception as err:
+            log(f"시각 해시 계산 실패로 스킵: {item.id[:8]} {mask_secret(str(err))}")
+            continue
+        if store is not None:
+            try:
+                store.update_perceptual_hash(item.id, item.perceptual_hash)
+            except Exception as err:
+                log(f"pHash 백필 실패: {item.id[:8]} {mask_secret(str(err))}")
+        hashed_items.append(item)
+    return hashed_items
+
+
+def _delete_visual_duplicates(store: MediaStore, groups: list[dict]) -> None:
+    """중복 그룹의 삭제 후보를 파일/DB/임베딩 저장소에서 제거한다."""
+    emb_store = None
+    try:
+        emb_store = _get_emb_store()
+    except Exception as err:
+        log(f"임베딩 저장소 열기 실패, 벡터 삭제 스킵: {mask_secret(str(err))}")
+
+    for group in groups:
+        for item in group["duplicates"]:
+            try:
+                Path(item.path).unlink(missing_ok=True)
+            except Exception as err:
+                log(f"파일 삭제 실패: {item.id[:8]} {mask_secret(str(err))}")
+            store.delete(item.id)
+            if emb_store is None or not hasattr(emb_store, "delete"):
+                continue
+            try:
+                emb_store.delete(item.id)
+            except Exception as err:
+                log(f"임베딩 삭제 실패: {item.id[:8]} {mask_secret(str(err))}")
 
 
 @app.command()
@@ -689,16 +829,34 @@ def _safe_auth(cls) -> bool:
 def fetch(
     query: str = typer.Argument(..., help="검색 쿼리"),
     provider: str = typer.Option(..., "--provider", "-p", help="프로바이더 (giphy, reddit, unsplash, pexels, pixabay, openverse)"),
-    limit: int = typer.Option(1, "--limit", "-l", min=1, max=50, help="가져올 개수"),
+    limit: int = typer.Option(1, "--limit", "-l", min=1, max=50, help="가져올 개수 (같은 검색어 누적은 max-per-prompt가 별도로 가드)"),
     media_type: Optional[str] = typer.Option(None, "--media-type", help="mime 필터 (image|gif|video). 프로바이더 지원 범위 내"),
     subreddit: Optional[str] = typer.Option(None, "--subreddit", help="(reddit 전용) 특정 서브레딧 내에서만 검색. 예: memes, reactiongifs"),
     save: bool = typer.Option(True, "--save/--no-save", help="저장소에 자동 등록 (기본 on). 중복은 조용히 스킵"),
     skip_metadata: bool = typer.Option(False, "--skip-metadata", help="AI 이미지 분석 스킵"),
+    max_per_prompt: int = typer.Option(
+        FETCH_MAX_PER_PROMPT,
+        "--max-per-prompt",
+        envvar="MIM_CLI_MAX_PER_PROMPT",
+        min=0,
+        help="같은 (provider, 검색어) 조합 누적 상한. 0이면 비활성. 기본 3 — stock photo API에서 같은 검색어로 비슷한 결과가 쌓이는 걸 차단",
+    ),
+    semantic_threshold: float = typer.Option(
+        DEFAULT_SEMANTIC_THRESHOLD,
+        "--semantic-threshold",
+        envvar="MIM_CLI_SEMANTIC_THRESHOLD",
+        min=0.0, max=2.0,
+        help="AI 메타 임베딩 cosine distance 허용값. 0이면 비활성, 0.05면 cosine_sim ≥ 0.95, 2가 정반대",
+    ),
 ) -> None:
     """온라인 무료 API에서 미디어 검색 + 자동 저장.
 
     중복(같은 source_id 또는 content_hash)은 조용히 스킵하고 기존 아이템 반환.
     쿼리는 프롬프트와 함께 저장되어 검색 가능.
+
+    추가 가드:
+      - max-per-prompt: 같은 검색어 누적 상한 (기본 3)
+      - semantic-threshold: AI 메타 임베딩 의미 유사도 dedup (기본 cosine_sim ≥ 0.95)
     """
     fp = _build_fetch_provider(provider, subreddit=subreddit)
 
@@ -775,6 +933,8 @@ def fetch(
                 width=m.width,
                 height=m.height,
                 skip_metadata=skip_metadata,
+                max_per_prompt=max_per_prompt,
+                semantic_threshold=semantic_threshold,
             )
         except Exception as e:
             err_type, extra = classify_error(e)

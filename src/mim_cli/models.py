@@ -29,6 +29,7 @@ class MediaItem:
     prompt: Optional[str] = None                  # 생성 프롬프트 또는 검색 쿼리
     model: Optional[str] = None                   # 생성 모델 별명 (generated 전용)
     content_hash: Optional[str] = None            # 파일 SHA256 (중복 판별 2차 키)
+    perceptual_hash: Optional[str] = None         # pHash 기반 시각 중복 판별 키
     attribution: Optional[str] = None             # 저작자 크레딧 문자열
     license: Optional[str] = None                 # 라이선스 식별자 (예: 'CC0', 'Unsplash')
     license_url: Optional[str] = None             # 라이선스 링크

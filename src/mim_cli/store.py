@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS media_items (
     prompt TEXT,
     model TEXT,
     content_hash TEXT,
+    perceptual_hash TEXT,
     attribution TEXT,
     license TEXT,
     license_url TEXT,
@@ -45,6 +46,11 @@ ON media_items(source_provider, source_id);
 CREATE_INDEX_CONTENT_HASH = """
 CREATE INDEX IF NOT EXISTS idx_content_hash
 ON media_items(content_hash);
+"""
+
+CREATE_INDEX_PERCEPTUAL_HASH = """
+CREATE INDEX IF NOT EXISTS idx_perceptual_hash
+ON media_items(perceptual_hash);
 """
 
 # 원자적 중복 방지 (부분 유니크 — NULL 값은 중복 허용)
@@ -146,9 +152,18 @@ def _migrate_v1_to_v2(conn: sqlite3.Connection) -> None:
     conn.execute(CREATE_UNIQUE_CONTENT_HASH)
 
 
+def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
+    """pHash 기반 시각 중복 판별 컬럼과 조회용 인덱스 추가."""
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(media_items)")}
+    if "perceptual_hash" not in existing:
+        conn.execute("ALTER TABLE media_items ADD COLUMN perceptual_hash TEXT")
+    conn.execute(CREATE_INDEX_PERCEPTUAL_HASH)
+
+
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _migrate_v0_to_v1,
     _migrate_v1_to_v2,
+    _migrate_v2_to_v3,
 ]
 """인덱스 = 적용된 후 user_version 값. 즉 MIGRATIONS[0]을 실행하면 user_version이 1이 됨."""
 
@@ -175,9 +190,10 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
 
 
 class MediaStore:
-    def __init__(self, db_path: Path):
+    def __init__(self, db_path: Path, initialize: bool = True):
         self.db_path = db_path
-        self._init_db()
+        if initialize:
+            self._init_db()
 
     def _conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
@@ -201,6 +217,7 @@ class MediaStore:
             # 신규 DB를 위해 인덱스도 확실히 생성 (ALTER 경로 안 탔을 때)
             conn.execute(CREATE_INDEX_SOURCE_KEY)
             conn.execute(CREATE_INDEX_CONTENT_HASH)
+            conn.execute(CREATE_INDEX_PERCEPTUAL_HASH)
             conn.execute(CREATE_UNIQUE_SOURCE_KEY)
             conn.execute(CREATE_UNIQUE_CONTENT_HASH)
 
@@ -220,10 +237,10 @@ class MediaStore:
                    (id, path, media_type, name, description,
                     tags, emotions, context, created_at, updated_at,
                     source, source_provider, source_url, source_id,
-                    prompt, model, content_hash, attribution,
+                    prompt, model, content_hash, perceptual_hash, attribution,
                     license, license_url, width, height)
                    VALUES (?,?,?,?,?,?,?,?,?,?,
-                           ?,?,?,?,?,?,?,?,?,?,?,?)""",
+                           ?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     item.id, item.path, item.media_type, item.name,
                     item.description,
@@ -233,7 +250,7 @@ class MediaStore:
                     item.created_at, item.updated_at,
                     item.source, item.source_provider, item.source_url,
                     item.source_id, item.prompt, item.model,
-                    item.content_hash, item.attribution,
+                    item.content_hash, item.perceptual_hash, item.attribution,
                     item.license, item.license_url,
                     item.width, item.height,
                 ),
@@ -331,5 +348,56 @@ class MediaStore:
                    WHERE content_hash = ?
                    LIMIT 1""",
                 (content_hash,),
+            ).fetchone()
+        return self._row_to_item(row) if row else None
+
+    def count_by_prompt(
+        self, source_provider: str, prompt: str
+    ) -> int:
+        """같은 (provider, prompt) 조합 누적 건수.
+
+        prompt-saturation 가드용. fetch에서 같은 검색어로 N건 이상 저장되는 걸 막는다.
+        """
+        with self._conn() as conn:
+            row = conn.execute(
+                """SELECT COUNT(*) FROM media_items
+                   WHERE source_provider = ? AND prompt = ?""",
+                (source_provider, prompt),
+            ).fetchone()
+        return int(row[0]) if row else 0
+
+    def list_with_perceptual_hash(self) -> list[MediaItem]:
+        """perceptual_hash가 있는 항목만 반환. saver의 pHash dedup hot path 비용을 줄인다.
+
+        idx_perceptual_hash 인덱스로 NULL 행을 빠르게 건너뛴다 (full scan 회피).
+        """
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM media_items WHERE perceptual_hash IS NOT NULL"
+            ).fetchall()
+        return [self._row_to_item(r) for r in rows]
+
+    def update_perceptual_hash(self, item_id: str, perceptual_hash: str) -> None:
+        """기존 항목의 pHash 백필. dedup --apply에서 dry-run 중 계산한 값을 영속화."""
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE media_items SET perceptual_hash = ? WHERE id = ?",
+                (perceptual_hash, item_id),
+            )
+
+    def find_oldest_by_prompt(
+        self, source_provider: str, prompt: str
+    ) -> Optional[MediaItem]:
+        """같은 (provider, prompt) 조합 중 가장 오래된 아이템.
+
+        saturation 가드가 발동했을 때 '대표 아이템'으로 반환할 후보.
+        """
+        with self._conn() as conn:
+            row = conn.execute(
+                """SELECT * FROM media_items
+                   WHERE source_provider = ? AND prompt = ?
+                   ORDER BY created_at ASC
+                   LIMIT 1""",
+                (source_provider, prompt),
             ).fetchone()
         return self._row_to_item(row) if row else None

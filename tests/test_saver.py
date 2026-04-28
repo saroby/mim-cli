@@ -190,3 +190,177 @@ def test_sha256_consistency(tmp_path):
     p.write_bytes(b"hello")
     # sha256("hello") 검증
     assert sha256_file(p) == "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# 옵션 2: prompt-saturation 가드 (같은 (provider, prompt) 누적 상한)
+# ─────────────────────────────────────────────────────────────────────────
+
+
+def test_max_per_prompt_returns_existing_after_threshold(env, store, emb_store, metadata_gen):
+    """같은 prompt+provider 조합이 max_per_prompt 도달 시 신규 저장 거부."""
+    common = dict(
+        store=store, emb_store=emb_store, metadata_gen=metadata_gen,
+        suffix=".jpg", media_type="image",
+        source="fetched", source_provider="pexels",
+        prompt="휴대폰 보는 사람",
+        max_per_prompt=2,
+    )
+    first, _ = save_media(data=b"image1", source_id="p-1", **common)
+    second, _ = save_media(data=b"image2", source_id="p-2", **common)
+    third, third_is_new = save_media(data=b"image3", source_id="p-3", **common)
+
+    # 3번째는 거부되고 첫 번째(가장 오래된) 항목이 반환됨
+    assert third_is_new is False
+    assert third.id == first.id
+    # DB에는 2건만 저장됨
+    assert len([i for i in store.list_all() if i.prompt == "휴대폰 보는 사람"]) == 2
+
+
+def test_max_per_prompt_disabled_when_zero(env, store, emb_store, metadata_gen):
+    """max_per_prompt=0/None이면 가드 비활성, 무제한 누적."""
+    common = dict(
+        store=store, emb_store=emb_store, metadata_gen=metadata_gen,
+        suffix=".jpg", media_type="image",
+        source="fetched", source_provider="pexels",
+        prompt="질문",
+        max_per_prompt=0,
+    )
+    save_media(data=b"a", source_id="p-1", **common)
+    save_media(data=b"b", source_id="p-2", **common)
+    _, third_is_new = save_media(data=b"c", source_id="p-3", **common)
+    assert third_is_new is True
+
+
+def test_max_per_prompt_force_bypass(env, store, emb_store, metadata_gen):
+    """force=True면 saturation 가드 우회."""
+    common = dict(
+        store=store, emb_store=emb_store, metadata_gen=metadata_gen,
+        suffix=".jpg", media_type="image",
+        source="fetched", source_provider="pexels",
+        prompt="동일 prompt",
+        max_per_prompt=1,
+    )
+    save_media(data=b"a", source_id="p-1", **common)
+    _, second_is_new = save_media(
+        data=b"b", source_id="p-2", **common, force=True,
+    )
+    assert second_is_new is True
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# 옵션 1: semantic dedup (AI 메타 임베딩 cosine distance)
+# ─────────────────────────────────────────────────────────────────────────
+
+
+def test_semantic_dedup_returns_existing_when_close(env, store, metadata_gen):
+    """기존 임베딩과 cosine distance ≤ threshold면 신규 저장 거부."""
+    emb = MagicMock()
+    # 첫 호출은 빈 결과 (DB 비어있음), 두 번째 호출에서 가까운 매치를 반환하도록 side_effect 설정
+    pending_matches: list[tuple[str, float]] = []
+    # query_with_distance는 (matches, embedding) 튜플 반환
+    emb.query_with_distance.side_effect = lambda *a, **kw: (list(pending_matches), [0.0])
+
+    first, first_is_new = save_media(
+        store=store, emb_store=emb, metadata_gen=metadata_gen,
+        data=b"first", suffix=".jpg", media_type="image",
+        source="fetched", source_provider="pexels", source_id="p-1",
+        prompt="cat",
+        semantic_threshold=0.05,
+    )
+    assert first_is_new is True
+
+    # 두 번째 시도에서 첫 번째 항목과 매우 가까운 거리(0.01)를 반환
+    pending_matches.append((first.id, 0.01))
+
+    second, second_is_new = save_media(
+        store=store, emb_store=emb, metadata_gen=metadata_gen,
+        data=b"different bytes but semantic dup",
+        suffix=".jpg", media_type="image",
+        source="fetched", source_provider="pexels", source_id="p-2",
+        prompt="kitten",
+        semantic_threshold=0.05,
+    )
+    assert second_is_new is False
+    assert second.id == first.id
+
+
+def test_semantic_dedup_passes_when_far(env, store, metadata_gen):
+    """cosine distance > threshold면 신규 저장."""
+    emb = MagicMock()
+    pending_matches: list[tuple[str, float]] = []
+    # query_with_distance는 (matches, embedding) 튜플 반환
+    emb.query_with_distance.side_effect = lambda *a, **kw: (list(pending_matches), [0.0])
+
+    first, _ = save_media(
+        store=store, emb_store=emb, metadata_gen=metadata_gen,
+        data=b"first", suffix=".jpg", media_type="image",
+        source="fetched", source_provider="pexels", source_id="p-1",
+        prompt="cat",
+        semantic_threshold=0.05,
+    )
+
+    # 거리 0.5 — threshold 0.05 초과 → 통과
+    pending_matches.append((first.id, 0.5))
+
+    second, second_is_new = save_media(
+        store=store, emb_store=emb, metadata_gen=metadata_gen,
+        data=b"second", suffix=".jpg", media_type="image",
+        source="fetched", source_provider="pexels", source_id="p-2",
+        prompt="dog",
+        semantic_threshold=0.05,
+    )
+    assert second_is_new is True
+    assert second.id != first.id
+
+
+def test_semantic_dedup_force_bypass(env, store, metadata_gen):
+    """force=True면 semantic dedup도 우회."""
+    emb = MagicMock()
+    pending_matches: list[tuple[str, float]] = []
+    # query_with_distance는 (matches, embedding) 튜플 반환
+    emb.query_with_distance.side_effect = lambda *a, **kw: (list(pending_matches), [0.0])
+
+    first, _ = save_media(
+        store=store, emb_store=emb, metadata_gen=metadata_gen,
+        data=b"a", suffix=".jpg", media_type="image",
+        source="fetched", source_provider="pexels", source_id="p-1",
+        prompt="cat",
+    )
+    pending_matches.append((first.id, 0.0))
+
+    _, second_is_new = save_media(
+        store=store, emb_store=emb, metadata_gen=metadata_gen,
+        data=b"b", suffix=".jpg", media_type="image",
+        source="fetched", source_provider="pexels", source_id="p-2",
+        prompt="cat",
+        force=True,
+    )
+    assert second_is_new is True
+
+
+def test_semantic_dedup_skipped_when_metadata_empty(env, store, metadata_gen):
+    """skip_metadata=True 또는 메타가 비어있으면 semantic 비교 자체를 안 함."""
+    emb = MagicMock()
+    save_media(
+        store=store, emb_store=emb, metadata_gen=metadata_gen,
+        data=b"a", suffix=".jpg", media_type="image",
+        source="fetched", source_provider="pexels", source_id="p-1",
+        prompt="cat",
+        skip_metadata=True,
+        semantic_threshold=0.05,
+    )
+    emb.query_with_distance.assert_not_called()
+
+
+def test_semantic_dedup_disabled_when_threshold_none(env, store, metadata_gen):
+    """semantic_threshold=None이면 임베딩 조회 자체를 스킵."""
+    emb = MagicMock()
+    save_media(
+        store=store, emb_store=emb, metadata_gen=metadata_gen,
+        data=b"a", suffix=".jpg", media_type="image",
+        source="fetched", source_provider="pexels", source_id="p-1",
+        prompt="cat",
+        semantic_threshold=None,
+    )
+    emb.query_with_distance.assert_not_called()
