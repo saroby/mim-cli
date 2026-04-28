@@ -1,6 +1,6 @@
 [project]
 name = "mim-cli"
-version = "0.1.0"
+version = "0.2.0"
 description = "밈 미디어 관리 및 검색 CLI"
 requires-python = ">=3.11"
 dependencies = [
